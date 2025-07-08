@@ -24,7 +24,7 @@ pub type NoUserData = ();
 /// This will automatically setup all the resources needed to run a physics simulation with the
 /// Rapier physics engine.
 pub struct RapierPhysicsPlugin<PhysicsHooks = ()> {
-    schedule: Interned<dyn ScheduleLabel>,
+    pub schedule: Interned<dyn ScheduleLabel>,
     default_system_setup: bool,
     /// Read during [`RapierPhysicsPlugin::build()`],
     /// to help initializing [`RapierContextInitialization`] resource.
