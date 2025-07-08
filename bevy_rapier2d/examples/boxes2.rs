@@ -1,4 +1,6 @@
-use bevy::prelude::*;
+use std::time::Duration;
+
+use bevy::{prelude::*, winit::WinitSettings};
 use bevy_rapier2d::prelude::*;
 
 // Constants for random cube spawning
@@ -16,6 +18,12 @@ fn main() {
             0xF9 as f32 / 255.0,
             0xFF as f32 / 255.0,
         )))
+        .insert_resource(WinitSettings {
+            focused_mode: bevy::winit::UpdateMode::reactive_low_power(Duration::from_secs_f32(
+                1.0 / 30.0, // 30 FPS
+            )),
+            unfocused_mode: bevy::winit::UpdateMode::reactive_low_power(Duration::from_secs(1)),
+        })
         .add_plugins((
             DefaultPlugins,
             RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0),
