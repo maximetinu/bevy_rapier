@@ -7,6 +7,62 @@ use bevy::{
 };
 use bevy_rapier2d::prelude::*;
 
+use web_sys::window;
+
+#[macro_export]
+macro_rules! mark {
+    ($($arg:tt)*) => {
+        mark(&format!($($arg)*))
+    };
+}
+
+#[macro_export]
+macro_rules! mark_start {
+    ($($arg:tt)*) => {
+        mark_start(&format!($($arg)*))
+    };
+}
+
+#[macro_export]
+macro_rules! mark_end {
+    ($($arg:tt)*) => {
+        mark_end(&format!($($arg)*))
+    };
+}
+
+#[macro_export]
+macro_rules! measure {
+    ($($arg:tt)*) => {
+        measure(&format!($($arg)*))
+    };
+}
+
+fn mark(name: &str) {
+    let Some(window) = window() else { return };
+    let Some(performance) = window.performance() else {
+        return;
+    };
+    let _ = performance.mark(name);
+}
+
+fn mark_start(name: &str) {
+    mark(&format!("{name} start"));
+}
+
+fn mark_end(name: &str) {
+    mark(&format!("{name} end"));
+}
+
+fn measure(name: &str) {
+    let Some(window) = window() else { return };
+    let Some(performance) = window.performance() else {
+        return;
+    };
+    let start_mark = format!("{name} start");
+    let end_mark = format!("{name} end");
+    let _ = performance.measure_with_start_mark_and_end_mark(name, &start_mark, &end_mark);
+}
+
 pub const PLAYER: Group = Group::GROUP_1;
 pub const DYNAMIC_CUBES: Group = Group::GROUP_2;
 pub const FIXED_CUBES: Group = Group::GROUP_3;
@@ -36,6 +92,10 @@ pub struct CameraController {
 }
 
 fn main() {
+    let rapier = RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0);
+
+    let rapier_schedule = rapier.schedule;
+
     App::new()
         .insert_resource(ClearColor(Color::srgb(
             0xF9 as f32 / 255.0,
@@ -48,14 +108,26 @@ fn main() {
             )),
             unfocused_mode: bevy::winit::UpdateMode::reactive_low_power(Duration::from_secs(1)),
         })
-        .add_plugins((
-            DefaultPlugins,
-            RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0),
-            RapierDebugRenderPlugin::default(),
-        ))
+        .add_plugins((DefaultPlugins, rapier, RapierDebugRenderPlugin::default()))
         .add_systems(Startup, (setup_graphics, setup_physics))
         .add_systems(Update, (player_movement, camera_controls))
+        .add_systems(
+            rapier_schedule,
+            (
+                start_measure.before(PhysicsSet::StepSimulation),
+                end_measure.after(PhysicsSet::StepSimulation),
+            ),
+        )
         .run();
+}
+
+pub fn start_measure() {
+    mark_start!("physics step!");
+}
+
+pub fn end_measure() {
+    mark_end!("physics step!");
+    measure!("physics step!");
 }
 
 pub fn setup_graphics(mut commands: Commands) {
