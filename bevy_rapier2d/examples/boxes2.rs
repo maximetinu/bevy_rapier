@@ -223,6 +223,7 @@ pub fn setup_physics(mut commands: Commands, mut rapier_config: Query<&mut Rapie
         Collider::ball(player_size),
         Player(300.0), // Player movement speed
         CollisionGroups::new(PLAYER, PLAYER | DYNAMIC_CUBES | FIXED_CUBES | GROUND),
+        Ccd::enabled(),
     ));
 }
 
