@@ -1,6 +1,10 @@
 use std::time::Duration;
 
-use bevy::{prelude::*, winit::WinitSettings};
+use bevy::{
+    input::mouse::{MouseMotion, MouseWheel},
+    prelude::*,
+    winit::WinitSettings,
+};
 use bevy_rapier2d::prelude::*;
 
 pub const PLAYER: Group = Group::GROUP_1;
@@ -22,6 +26,15 @@ const SPAWN_RADIUS: f32 = 10000.0;
 #[derive(Component)]
 pub struct Player(f32);
 
+// Component to track camera state
+#[derive(Component)]
+pub struct CameraController {
+    pub zoom_speed: f32,
+    pub pan_speed: f32,
+    pub min_zoom: f32,
+    pub max_zoom: f32,
+}
+
 fn main() {
     App::new()
         .insert_resource(ClearColor(Color::srgb(
@@ -41,12 +54,21 @@ fn main() {
             RapierDebugRenderPlugin::default(),
         ))
         .add_systems(Startup, (setup_graphics, setup_physics))
-        .add_systems(Update, player_movement)
+        .add_systems(Update, (player_movement, camera_controls))
         .run();
 }
 
 pub fn setup_graphics(mut commands: Commands) {
-    commands.spawn((Camera2d, Transform::from_xyz(0.0, 20.0, 0.0)));
+    commands.spawn((
+        Camera2d,
+        Transform::from_xyz(0.0, 20.0, 0.0),
+        CameraController {
+            zoom_speed: 0.1,
+            pan_speed: 1.0,
+            min_zoom: 0.01,
+            max_zoom: 10000.0,
+        },
+    ));
 }
 
 pub fn setup_physics(mut commands: Commands, mut rapier_config: Query<&mut RapierConfiguration>) {
@@ -153,5 +175,40 @@ pub fn player_movement(
         // Update the velocity on the rigid_body_component,
         // the bevy_rapier plugin will update the transform.
         rb_vels.linvel = move_delta * player.0;
+    }
+}
+
+pub fn camera_controls(
+    mut camera_query: Query<(&mut Transform, &mut Projection, &CameraController)>,
+    mut mouse_wheel_events: EventReader<MouseWheel>,
+    mut mouse_motion_events: EventReader<MouseMotion>,
+    mouse_button_input: Res<ButtonInput<MouseButton>>,
+) {
+    let Ok((mut transform, mut projection, camera_controller)) = camera_query.single_mut() else {
+        return;
+    };
+
+    let orthographic_projection = match &mut *projection {
+        Projection::Orthographic(orthographic_projection) => orthographic_projection,
+        _ => return,
+    };
+
+    // Handle mouse wheel zoom
+    for event in mouse_wheel_events.read() {
+        let zoom_delta = event.y * camera_controller.zoom_speed;
+        let new_scale = (orthographic_projection.scale - zoom_delta)
+            .clamp(camera_controller.min_zoom, camera_controller.max_zoom);
+        orthographic_projection.scale = new_scale;
+    }
+
+    // Handle mouse panning (hold left, middle or right mouse button)
+    if mouse_button_input.any_pressed([MouseButton::Left, MouseButton::Middle, MouseButton::Right])
+    {
+        for event in mouse_motion_events.read() {
+            // Make panning speed inversely proportional to zoom scale
+            let adjusted_pan_speed = camera_controller.pan_speed * orthographic_projection.scale;
+            let pan_delta = Vec2::new(-event.delta.x, event.delta.y) * adjusted_pan_speed;
+            transform.translation += Vec3::new(pan_delta.x, pan_delta.y, 0.0);
+        }
     }
 }
