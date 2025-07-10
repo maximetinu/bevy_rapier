@@ -3,9 +3,20 @@ use std::time::Duration;
 use bevy::{prelude::*, winit::WinitSettings};
 use bevy_rapier2d::prelude::*;
 
+pub const PLAYER: Group = Group::GROUP_1;
+pub const DYNAMIC_CUBES: Group = Group::GROUP_2;
+pub const FIXED_CUBES: Group = Group::GROUP_3;
+pub const GROUND: Group = Group::GROUP_4;
+
 // Constants for random cube spawning
-const NUM_RANDOM_CUBES: usize = 12000;
-const SPAWN_RADIUS: f32 = 50000.0;
+
+// bad performance:
+// const NUM_RANDOM_CUBES: usize = 12000;
+// const SPAWN_RADIUS: f32 = 50000.0;
+
+// good performance:
+const NUM_RANDOM_CUBES: usize = 3000;
+const SPAWN_RADIUS: f32 = 10000.0;
 
 // The float value is the player movement speed in 'pixels/second'.
 #[derive(Component)]
@@ -53,6 +64,7 @@ pub fn setup_physics(mut commands: Commands, mut rapier_config: Query<&mut Rapie
     commands.spawn((
         Transform::from_xyz(0.0, 0.0 * -ground_height, 0.0),
         Collider::cuboid(ground_size, ground_height),
+        CollisionGroups::new(GROUND, GROUND | DYNAMIC_CUBES | FIXED_CUBES | PLAYER),
     ));
 
     /*
@@ -76,6 +88,7 @@ pub fn setup_physics(mut commands: Commands, mut rapier_config: Query<&mut Rapie
                 Transform::from_xyz(x, y, 0.0),
                 RigidBody::Dynamic,
                 Collider::cuboid(rad, rad),
+                CollisionGroups::new(DYNAMIC_CUBES, DYNAMIC_CUBES | FIXED_CUBES | GROUND | PLAYER),
             ));
         }
 
@@ -101,6 +114,7 @@ pub fn setup_physics(mut commands: Commands, mut rapier_config: Query<&mut Rapie
             Transform::from_xyz(x, y, 0.0),
             RigidBody::Fixed,
             Collider::cuboid(rad, rad),
+            CollisionGroups::new(FIXED_CUBES, FIXED_CUBES | DYNAMIC_CUBES | GROUND | PLAYER),
         ));
     }
 
@@ -114,6 +128,7 @@ pub fn setup_physics(mut commands: Commands, mut rapier_config: Query<&mut Rapie
         Velocity::zero(),
         Collider::ball(player_size),
         Player(300.0), // Player movement speed
+        CollisionGroups::new(PLAYER, PLAYER | DYNAMIC_CUBES | FIXED_CUBES | GROUND),
     ));
 }
 
