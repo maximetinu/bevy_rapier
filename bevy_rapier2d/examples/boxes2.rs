@@ -1,3 +1,4 @@
+use std::num::NonZeroUsize;
 use std::time::Duration;
 
 use bevy::{
@@ -7,6 +8,7 @@ use bevy::{
 };
 use bevy_rapier2d::prelude::*;
 
+use rapier2d::prelude::IntegrationParameters;
 use web_sys::{window, Url, UrlSearchParams};
 
 #[macro_export]
@@ -63,10 +65,17 @@ fn measure(name: &str) {
     let _ = performance.measure_with_start_mark_and_end_mark(name, &start_mark, &end_mark);
 }
 
-pub const PLAYER: Group = Group::GROUP_1;
-pub const DYNAMIC_CUBES: Group = Group::GROUP_2;
-pub const FIXED_CUBES: Group = Group::GROUP_3;
-pub const GROUND: Group = Group::GROUP_4;
+// worse for perf ?
+// pub const PLAYER: Group = Group::GROUP_1;
+// pub const DYNAMIC_CUBES: Group = Group::GROUP_2;
+// pub const FIXED_CUBES: Group = Group::GROUP_3;
+// pub const GROUND: Group = Group::GROUP_4;
+
+// better for perf ?
+pub const PLAYER: Group = Group::NONE;
+pub const DYNAMIC_CUBES: Group = Group::NONE;
+pub const FIXED_CUBES: Group = Group::NONE;
+pub const GROUND: Group = Group::NONE;
 
 // Default constants for random cube spawning
 const DEFAULT_NUM_RANDOM_CUBES: usize = 3000;
@@ -131,14 +140,14 @@ fn main() {
             0xF9 as f32 / 255.0,
             0xFF as f32 / 255.0,
         )))
-        .insert_resource(WinitSettings {
-            focused_mode: bevy::winit::UpdateMode::reactive_low_power(Duration::from_secs_f32(
-                1.0 / 30.0, // 30 FPS
-            )),
-            unfocused_mode: bevy::winit::UpdateMode::reactive_low_power(Duration::from_secs(1)),
-        })
+        // .insert_resource(WinitSettings {
+        //     focused_mode: bevy::winit::UpdateMode::reactive_low_power(Duration::from_secs_f32(
+        //         1.0 / 30.0, // 30 FPS
+        //     )),
+        //     unfocused_mode: bevy::winit::UpdateMode::reactive_low_power(Duration::from_secs(1)),
+        // })
         .add_plugins((DefaultPlugins, rapier, RapierDebugRenderPlugin::default()))
-        .add_systems(Startup, (setup_graphics, setup_physics))
+        .add_systems(Startup, (setup_graphics, setup_physics, setup_phys_config))
         .add_systems(Update, (player_movement, camera_controls))
         .add_systems(
             rapier_schedule,
@@ -157,6 +166,29 @@ pub fn start_measure() {
 pub fn end_measure() {
     mark_end!("physics step!");
     measure!("physics step!");
+}
+
+pub fn setup_phys_config(mut ctx: Query<&mut RapierContextSimulation>) {
+    let mut ctx = ctx.single_mut().unwrap();
+    ctx.integration_parameters = IntegrationParameters {
+        dt: 1.0 / 60.0,
+        min_ccd_dt: 1.0 / 60.0 / 10.0,
+        contact_damping_ratio: 10.0, // Higher value = more compliant, less accurate but faster
+        contact_natural_frequency: 5.0, // Lower value = slower penetration correction, less jitter
+        joint_natural_frequency: 1.0e4, // Lower than default for performance
+        joint_damping_ratio: 2.0,    // Higher value = more compliant joints
+        warmstart_coefficient: 0.1,  // Reduced from 1.0 for less warmstarting overhead
+        length_unit: 100.0,          // Keep default
+        normalized_allowed_linear_error: 0.01, // Higher tolerance = less correction work
+        normalized_max_corrective_velocity: 5.0, // Lower than default = less aggressive correction
+        normalized_prediction_distance: 0.001, // Lower value = fewer predictive contacts
+        num_solver_iterations: NonZeroUsize::new(1).unwrap(), // Reduced from 4 for performance
+        num_additional_friction_iterations: 0, // Keep at 0 for performance
+        num_internal_pgs_iterations: 1, // Keep at 1 for performance
+        num_internal_stabilization_iterations: 1, // Reduced from 2 for performance
+        min_island_size: 256,        // Increased for better SIMD parallelism
+        max_ccd_substeps: 1,         // Keep at 1 for performance
+    };
 }
 
 pub fn setup_graphics(mut commands: Commands) {
@@ -238,7 +270,7 @@ pub fn setup_physics(mut commands: Commands, mut rapier_config: Query<&mut Rapie
 
         commands.spawn((
             Transform::from_xyz(x, y, 0.0),
-            RigidBody::Fixed,
+            // RigidBody::Fixed,
             Collider::cuboid(rad, rad),
             CollisionGroups::new(FIXED_CUBES, FIXED_CUBES | DYNAMIC_CUBES | GROUND | PLAYER),
         ));
@@ -255,7 +287,7 @@ pub fn setup_physics(mut commands: Commands, mut rapier_config: Query<&mut Rapie
         Collider::ball(player_size),
         Player(300.0), // Player movement speed
         CollisionGroups::new(PLAYER, PLAYER | DYNAMIC_CUBES | FIXED_CUBES | GROUND),
-        Ccd::enabled(),
+        // Ccd::enabled(),
     ));
 }
 
