@@ -90,6 +90,10 @@ web-sys = { version = "0.3", default-features = false, features = [
     "MemoryMeasurement",
     "Performance",
     "console",
+    "Url",
+    "UrlSearchParams",
+    "Window",
+    "Location",
 ] }
 
 [package.metadata.docs.rs]

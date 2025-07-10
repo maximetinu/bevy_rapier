@@ -7,7 +7,7 @@ use bevy::{
 };
 use bevy_rapier2d::prelude::*;
 
-use web_sys::window;
+use web_sys::{window, Url, UrlSearchParams};
 
 #[macro_export]
 macro_rules! mark {
@@ -68,15 +68,13 @@ pub const DYNAMIC_CUBES: Group = Group::GROUP_2;
 pub const FIXED_CUBES: Group = Group::GROUP_3;
 pub const GROUND: Group = Group::GROUP_4;
 
-// Constants for random cube spawning
+// Default constants for random cube spawning
+const DEFAULT_NUM_RANDOM_CUBES: usize = 3000;
+const DEFAULT_SPAWN_RADIUS: f32 = 10000.0;
 
 // bad performance:
 // const NUM_RANDOM_CUBES: usize = 12000;
 // const SPAWN_RADIUS: f32 = 50000.0;
-
-// good performance:
-const NUM_RANDOM_CUBES: usize = 3000;
-const SPAWN_RADIUS: f32 = 10000.0;
 
 // The float value is the player movement speed in 'pixels/second'.
 #[derive(Component)]
@@ -89,6 +87,37 @@ pub struct CameraController {
     pub pan_speed: f32,
     pub min_zoom: f32,
     pub max_zoom: f32,
+}
+
+fn get_url_params() -> (usize, f32) {
+    let Some(window) = window() else {
+        return (DEFAULT_NUM_RANDOM_CUBES, DEFAULT_SPAWN_RADIUS);
+    };
+
+    let location = window.location();
+    let url_string = match location.href() {
+        Ok(s) => s,
+        Err(_) => String::new(),
+    };
+
+    let Ok(url) = Url::new(&url_string) else {
+        return (DEFAULT_NUM_RANDOM_CUBES, DEFAULT_SPAWN_RADIUS);
+    };
+
+    let search_params = UrlSearchParams::new_with_str(&url.search())
+        .unwrap_or_else(|_| UrlSearchParams::new().unwrap());
+
+    let num_cubes = search_params
+        .get("cubes")
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(DEFAULT_NUM_RANDOM_CUBES);
+
+    let spawn_radius = search_params
+        .get("radius")
+        .and_then(|s| s.parse::<f32>().ok())
+        .unwrap_or(DEFAULT_SPAWN_RADIUS);
+
+    (num_cubes, spawn_radius)
 }
 
 fn main() {
@@ -195,10 +224,13 @@ pub fn setup_physics(mut commands: Commands, mut rapier_config: Query<&mut Rapie
     use oorandom::Rand32;
     let mut rng = Rand32::new(41); // Using a seed for reproducibility
 
-    for _ in 0..NUM_RANDOM_CUBES {
+    // Get parameters from URL or use defaults
+    let (num_random_cubes, spawn_radius) = get_url_params();
+
+    for _ in 0..num_random_cubes {
         // Generate random angle and distance for polar coordinates
         let angle = rng.rand_float() * std::f32::consts::TAU;
-        let distance = rng.rand_float() * SPAWN_RADIUS;
+        let distance = rng.rand_float() * spawn_radius;
 
         // Convert to cartesian coordinates
         let x = distance * angle.cos();
