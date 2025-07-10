@@ -4,8 +4,8 @@ use bevy::{prelude::*, winit::WinitSettings};
 use bevy_rapier2d::prelude::*;
 
 // Constants for random cube spawning
-const NUM_RANDOM_CUBES: usize = 3000;
-const SPAWN_RADIUS: f32 = 10000.0;
+const NUM_RANDOM_CUBES: usize = 12000;
+const SPAWN_RADIUS: f32 = 50000.0;
 
 // The float value is the player movement speed in 'pixels/second'.
 #[derive(Component)]
@@ -86,7 +86,7 @@ pub fn setup_physics(mut commands: Commands, mut rapier_config: Query<&mut Rapie
      * Create random fixed cubes
      */
     use oorandom::Rand32;
-    let mut rng = Rand32::new(42); // Using a seed for reproducibility
+    let mut rng = Rand32::new(41); // Using a seed for reproducibility
 
     for _ in 0..NUM_RANDOM_CUBES {
         // Generate random angle and distance for polar coordinates
@@ -107,9 +107,9 @@ pub fn setup_physics(mut commands: Commands, mut rapier_config: Query<&mut Rapie
     /*
      * Create player ball
      */
-    let player_size = 20.0;
+    let player_size = 5.0;
     commands.spawn((
-        Transform::from_xyz(0.0, 0.0, 0.0),
+        Transform::from_xyz(50.0, 200.0, 0.0),
         RigidBody::Dynamic,
         Velocity::zero(),
         Collider::ball(player_size),
