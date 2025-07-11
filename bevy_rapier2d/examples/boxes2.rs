@@ -79,7 +79,7 @@ pub const GROUND: Group = Group::GROUP_4;
 
 // Default constants for random cube spawning
 const DEFAULT_NUM_RANDOM_CUBES: usize = 5000;
-const DEFAULT_SPAWN_RADIUS: f32 = 20000.0;
+const DEFAULT_SPAWN_RADIUS: f32 = 40000.0;
 
 // bad performance:
 // const NUM_RANDOM_CUBES: usize = 12000;
@@ -242,7 +242,7 @@ pub fn setup_physics(mut commands: Commands, mut rapier_config: Query<&mut Rapie
             commands.spawn((
                 Transform::from_xyz(x, y, 0.0),
                 RigidBody::Dynamic,
-                Collider::cuboid(rad, rad),
+                Collider::cuboid(rad * 0.5, rad * 0.5),
                 CollisionGroups::new(DYNAMIC_CUBES, DYNAMIC_CUBES | FIXED_CUBES | GROUND | PLAYER),
             ));
         }
@@ -259,10 +259,16 @@ pub fn setup_physics(mut commands: Commands, mut rapier_config: Query<&mut Rapie
     // Get parameters from URL or use defaults
     let (num_random_cubes, spawn_radius) = get_url_params();
 
+    const SAFE_RADIUS: f32 = 1000.0;
+
     for _ in 0..num_random_cubes {
         // Generate random angle and distance for polar coordinates
         let angle = rng.rand_float() * std::f32::consts::TAU;
         let distance = rng.rand_float() * spawn_radius;
+
+        if distance < SAFE_RADIUS {
+            continue;
+        }
 
         // Convert to cartesian coordinates
         let x = distance * angle.cos();
@@ -274,8 +280,8 @@ pub fn setup_physics(mut commands: Commands, mut rapier_config: Query<&mut Rapie
         // let size_y = rad * rng.rand_float();
 
         // even worse
-        let size_x = rad * rad * rad * rng.rand_float();
-        let size_y = rad * rad * rad * rng.rand_float();
+        let size_x = rad * rad * rad * rng.rand_float() * 0.2;
+        let size_y = rad * rad * rad * rng.rand_float() * 0.2;
 
         // better perf ?
         // let size_x = rad;
