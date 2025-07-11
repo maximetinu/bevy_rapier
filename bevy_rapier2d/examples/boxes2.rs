@@ -176,7 +176,11 @@ fn main() {
         .add_systems(Startup, (setup_graphics, setup_physics, setup_phys_config))
         .add_systems(
             Update,
-            (player_movement, camera_controls, distance_based_activation),
+            (
+                player_movement, //
+                camera_controls,
+                distance_based_activation,
+            ),
         )
         .add_systems(
             rapier_schedule,
@@ -417,7 +421,8 @@ pub fn distance_based_activation(
         (With<Collider>, Without<RigidBody>, Without<Player>),
     >,
 ) {
-    const ACTIVATION_RADIUS: f32 = 1000.0;
+    mark_start!("distance_based_activation");
+    const ACTIVATION_RADIUS: f32 = 200.0;
 
     // Get player position
     let Ok(player_transform) = player_query.single() else {
@@ -452,4 +457,7 @@ pub fn distance_based_activation(
             commands.entity(entity).remove::<ColliderDisabled>();
         }
     }
+
+    mark_end!("distance_based_activation");
+    measure!("distance_based_activation");
 }
