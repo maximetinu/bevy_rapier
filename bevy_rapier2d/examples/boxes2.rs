@@ -66,20 +66,20 @@ fn measure(name: &str) {
 }
 
 // worse for perf ?
-// pub const PLAYER: Group = Group::GROUP_1;
-// pub const DYNAMIC_CUBES: Group = Group::GROUP_2;
-// pub const FIXED_CUBES: Group = Group::GROUP_3;
-// pub const GROUND: Group = Group::GROUP_4;
+pub const PLAYER: Group = Group::GROUP_1;
+pub const DYNAMIC_CUBES: Group = Group::GROUP_2;
+pub const FIXED_CUBES: Group = Group::GROUP_3;
+pub const GROUND: Group = Group::GROUP_4;
 
 // better for perf ?
-pub const PLAYER: Group = Group::NONE;
-pub const DYNAMIC_CUBES: Group = Group::NONE;
-pub const FIXED_CUBES: Group = Group::NONE;
-pub const GROUND: Group = Group::NONE;
+// pub const PLAYER: Group = Group::NONE;
+// pub const DYNAMIC_CUBES: Group = Group::NONE;
+// pub const FIXED_CUBES: Group = Group::NONE;
+// pub const GROUND: Group = Group::NONE;
 
 // Default constants for random cube spawning
-const DEFAULT_NUM_RANDOM_CUBES: usize = 3000;
-const DEFAULT_SPAWN_RADIUS: f32 = 10000.0;
+const DEFAULT_NUM_RANDOM_CUBES: usize = 5000;
+const DEFAULT_SPAWN_RADIUS: f32 = 20000.0;
 
 // bad performance:
 // const NUM_RANDOM_CUBES: usize = 12000;
@@ -270,8 +270,12 @@ pub fn setup_physics(mut commands: Commands, mut rapier_config: Query<&mut Rapie
 
         // worse perf ?
         // Generate random sizes for x and y dimensions independently
-        let size_x = rad * rad * rng.rand_float();
-        let size_y = rad * rad * rng.rand_float();
+        // let size_x = rad * rng.rand_float();
+        // let size_y = rad * rng.rand_float();
+
+        // even worse
+        let size_x = rad * rad * rad * rng.rand_float();
+        let size_y = rad * rad * rad * rng.rand_float();
 
         // better perf ?
         // let size_x = rad;
@@ -279,7 +283,7 @@ pub fn setup_physics(mut commands: Commands, mut rapier_config: Query<&mut Rapie
 
         commands.spawn((
             Transform::from_xyz(x, y, 0.0),
-            // RigidBody::Fixed,
+            RigidBody::Fixed,
             Collider::cuboid(size_x, size_y),
             CollisionGroups::new(FIXED_CUBES, FIXED_CUBES | DYNAMIC_CUBES | GROUND | PLAYER),
         ));
@@ -296,7 +300,7 @@ pub fn setup_physics(mut commands: Commands, mut rapier_config: Query<&mut Rapie
         Collider::ball(player_size),
         Player(300.0), // Player movement speed
         CollisionGroups::new(PLAYER, PLAYER | DYNAMIC_CUBES | FIXED_CUBES | GROUND),
-        // Ccd::enabled(),
+        Ccd::enabled(),
     ));
 }
 
