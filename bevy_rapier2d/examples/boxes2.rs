@@ -406,7 +406,7 @@ pub fn camera_controls(
     }
 }
 
-/// System to disable rigid bodies and colliders that are far from the player
+/// System to disable rigid bodies and colliders that are far from the player and cursor
 pub fn distance_based_activation(
     player_query: Query<&GlobalTransform, (With<Player>, Without<RigidBodyDisabled>)>,
     mut commands: Commands,
@@ -420,7 +420,11 @@ pub fn distance_based_activation(
         (Entity, &GlobalTransform),
         (With<Collider>, Without<RigidBody>, Without<Player>),
     >,
+    // Camera and cursor info
+    camera_query: Query<(&Camera, &GlobalTransform, &Projection)>,
+    window_query: Query<&Window>,
 ) {
+    #[cfg(target_arch = "wasm32")]
     mark_start!("distance_based_activation");
     const ACTIVATION_RADIUS: f32 = 200.0;
 
@@ -430,34 +434,115 @@ pub fn distance_based_activation(
     };
     let player_pos = player_transform.translation().truncate();
 
+    // Get cursor position in world space
+    let cursor_world_pos = get_cursor_world_position(&camera_query, &window_query);
+
     // Check entities with both rigid bodies and colliders
     for (entity, transform) in physics_entities.iter_mut() {
-        let distance = player_pos.distance(transform.translation().truncate());
+        let entity_pos = transform.translation().truncate();
+        let distance_to_player = player_pos.distance(entity_pos);
 
-        if distance > ACTIVATION_RADIUS {
-            // Disable both rigid body and collider if too far
-            commands.entity(entity).insert(RigidBodyDisabled);
-            commands.entity(entity).insert(ColliderDisabled);
+        // Check if close to either player or cursor
+        let should_be_active = if let Some(cursor_pos) = cursor_world_pos {
+            let distance_to_cursor = cursor_pos.distance(entity_pos);
+            distance_to_player <= ACTIVATION_RADIUS || distance_to_cursor <= ACTIVATION_RADIUS
         } else {
-            // Enable both if close enough
+            // If cursor is off screen, only check player distance
+            distance_to_player <= ACTIVATION_RADIUS
+        };
+
+        if should_be_active {
+            // Enable both if close enough to either player or cursor
             commands.entity(entity).remove::<RigidBodyDisabled>();
             commands.entity(entity).remove::<ColliderDisabled>();
+        } else {
+            // Disable both if too far from both
+            commands.entity(entity).insert(RigidBodyDisabled);
+            commands.entity(entity).insert(ColliderDisabled);
         }
     }
 
     // Check standalone colliders (like the ground)
     for (entity, transform) in standalone_colliders.iter_mut() {
-        let distance = player_pos.distance(transform.translation().truncate());
+        let entity_pos = transform.translation().truncate();
+        let distance_to_player = player_pos.distance(entity_pos);
 
-        if distance > ACTIVATION_RADIUS {
-            // Disable if too far
-            commands.entity(entity).insert(ColliderDisabled);
+        // Check if close to either player or cursor
+        let should_be_active = if let Some(cursor_pos) = cursor_world_pos {
+            let distance_to_cursor = cursor_pos.distance(entity_pos);
+            distance_to_player <= ACTIVATION_RADIUS || distance_to_cursor <= ACTIVATION_RADIUS
         } else {
-            // Enable if close enough
+            // If cursor is off screen, only check player distance
+            distance_to_player <= ACTIVATION_RADIUS
+        };
+
+        if should_be_active {
+            // Enable if close enough to either player or cursor
             commands.entity(entity).remove::<ColliderDisabled>();
+        } else {
+            // Disable if too far from both
+            commands.entity(entity).insert(ColliderDisabled);
         }
     }
 
-    mark_end!("distance_based_activation");
-    measure!("distance_based_activation");
+    #[cfg(target_arch = "wasm32")]
+    {
+        mark_end!("distance_based_activation");
+        measure!("distance_based_activation");
+    }
+}
+
+/// Helper function to get cursor position in world space
+fn get_cursor_world_position(
+    camera_query: &Query<(&Camera, &GlobalTransform, &Projection)>,
+    window_query: &Query<&Window>,
+) -> Option<Vec2> {
+    let Ok((_camera, camera_transform, projection)) = camera_query.single() else {
+        return None;
+    };
+
+    let Ok(window) = window_query.single() else {
+        return None;
+    };
+
+    // Get cursor position in screen space
+    let cursor_pos = window.cursor_position()?;
+
+    // Convert screen position to world position
+    let screen_size = Vec2::new(window.width(), window.height());
+    let screen_pos = Vec2::new(cursor_pos.x, cursor_pos.y);
+
+    // Convert to normalized device coordinates (-1 to 1)
+    let ndc = (screen_pos / screen_size) * 2.0 - Vec2::ONE;
+    let ndc = Vec3::new(ndc.x, -ndc.y, 0.0); // Flip Y and set Z to 0 for 2D
+
+    // Convert to world space
+    let world_pos = match projection {
+        Projection::Orthographic(ortho) => {
+            let view_matrix = camera_transform.compute_matrix();
+            let proj_matrix = Mat4::orthographic_rh(
+                -ortho.area.width() / 2.0,
+                ortho.area.width() / 2.0,
+                -ortho.area.height() / 2.0,
+                ortho.area.height() / 2.0,
+                ortho.near,
+                ortho.far,
+            );
+
+            let world_matrix = view_matrix.inverse() * proj_matrix.inverse();
+            world_matrix.project_point3(ndc).truncate()
+        }
+        Projection::Perspective(_) => {
+            // For perspective cameras, we'd need more complex math
+            // For now, just return None to avoid complexity
+            return None;
+        }
+        Projection::Custom(_) => {
+            // For custom projections, we'd need to handle them specifically
+            // For now, just return None to avoid complexity
+            return None;
+        }
+    };
+
+    Some(world_pos)
 }
