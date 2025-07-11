@@ -1,16 +1,17 @@
 use std::num::NonZeroUsize;
-use std::time::Duration;
 
 use bevy::{
     input::mouse::{MouseMotion, MouseWheel},
     prelude::*,
-    winit::WinitSettings,
 };
 use bevy_rapier2d::prelude::*;
 
 use rapier2d::prelude::IntegrationParameters;
+
+#[cfg(target_arch = "wasm32")]
 use web_sys::{window, Url, UrlSearchParams};
 
+#[cfg(target_arch = "wasm32")]
 #[macro_export]
 macro_rules! mark {
     ($($arg:tt)*) => {
@@ -18,6 +19,7 @@ macro_rules! mark {
     };
 }
 
+#[cfg(target_arch = "wasm32")]
 #[macro_export]
 macro_rules! mark_start {
     ($($arg:tt)*) => {
@@ -25,6 +27,7 @@ macro_rules! mark_start {
     };
 }
 
+#[cfg(target_arch = "wasm32")]
 #[macro_export]
 macro_rules! mark_end {
     ($($arg:tt)*) => {
@@ -32,6 +35,7 @@ macro_rules! mark_end {
     };
 }
 
+#[cfg(target_arch = "wasm32")]
 #[macro_export]
 macro_rules! measure {
     ($($arg:tt)*) => {
@@ -39,6 +43,7 @@ macro_rules! measure {
     };
 }
 
+#[cfg(target_arch = "wasm32")]
 fn mark(name: &str) {
     let Some(window) = window() else { return };
     let Some(performance) = window.performance() else {
@@ -47,14 +52,17 @@ fn mark(name: &str) {
     let _ = performance.mark(name);
 }
 
+#[cfg(target_arch = "wasm32")]
 fn mark_start(name: &str) {
     mark(&format!("{name} start"));
 }
 
+#[cfg(target_arch = "wasm32")]
 fn mark_end(name: &str) {
     mark(&format!("{name} end"));
 }
 
+#[cfg(target_arch = "wasm32")]
 fn measure(name: &str) {
     let Some(window) = window() else { return };
     let Some(performance) = window.performance() else {
@@ -64,6 +72,18 @@ fn measure(name: &str) {
     let end_mark = format!("{name} end");
     let _ = performance.measure_with_start_mark_and_end_mark(name, &start_mark, &end_mark);
 }
+
+#[cfg(not(target_arch = "wasm32"))]
+fn mark(_name: &str) {}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn mark_start(_name: &str) {}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn mark_end(_name: &str) {}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn measure(_name: &str) {}
 
 // worse for perf ?
 pub const PLAYER: Group = Group::GROUP_1;
@@ -98,6 +118,7 @@ pub struct CameraController {
     pub max_zoom: f32,
 }
 
+#[cfg(target_arch = "wasm32")]
 fn get_url_params() -> (usize, f32) {
     let Some(window) = window() else {
         return (DEFAULT_NUM_RANDOM_CUBES, DEFAULT_SPAWN_RADIUS);
@@ -129,6 +150,11 @@ fn get_url_params() -> (usize, f32) {
     (num_cubes, spawn_radius)
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+fn get_url_params() -> (usize, f32) {
+    (DEFAULT_NUM_RANDOM_CUBES, DEFAULT_SPAWN_RADIUS)
+}
+
 fn main() {
     let rapier = RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0);
 
@@ -148,7 +174,10 @@ fn main() {
         // })
         .add_plugins((DefaultPlugins, rapier, RapierDebugRenderPlugin::default()))
         .add_systems(Startup, (setup_graphics, setup_physics, setup_phys_config))
-        .add_systems(Update, (player_movement, camera_controls))
+        .add_systems(
+            Update,
+            (player_movement, camera_controls, distance_based_activation),
+        )
         .add_systems(
             rapier_schedule,
             (
@@ -160,12 +189,16 @@ fn main() {
 }
 
 pub fn start_measure() {
+    #[cfg(target_arch = "wasm32")]
     mark_start!("physics step!");
 }
 
 pub fn end_measure() {
-    mark_end!("physics step!");
-    measure!("physics step!");
+    #[cfg(target_arch = "wasm32")]
+    {
+        mark_end!("physics step!");
+        measure!("physics step!");
+    }
 }
 
 pub fn setup_phys_config(mut ctx: Query<&mut RapierContextSimulation>) {
@@ -365,6 +398,58 @@ pub fn camera_controls(
             let adjusted_pan_speed = camera_controller.pan_speed * orthographic_projection.scale;
             let pan_delta = Vec2::new(-event.delta.x, event.delta.y) * adjusted_pan_speed;
             transform.translation += Vec3::new(pan_delta.x, pan_delta.y, 0.0);
+        }
+    }
+}
+
+/// System to disable rigid bodies and colliders that are far from the player
+pub fn distance_based_activation(
+    player_query: Query<&GlobalTransform, (With<Player>, Without<RigidBodyDisabled>)>,
+    mut commands: Commands,
+    // Query for entities that have both RigidBody and Collider components
+    mut physics_entities: Query<
+        (Entity, &GlobalTransform),
+        (With<RigidBody>, With<Collider>, Without<Player>),
+    >,
+    // Query for entities that have only Collider (like the ground)
+    mut standalone_colliders: Query<
+        (Entity, &GlobalTransform),
+        (With<Collider>, Without<RigidBody>, Without<Player>),
+    >,
+) {
+    const ACTIVATION_RADIUS: f32 = 1000.0;
+
+    // Get player position
+    let Ok(player_transform) = player_query.single() else {
+        return;
+    };
+    let player_pos = player_transform.translation().truncate();
+
+    // Check entities with both rigid bodies and colliders
+    for (entity, transform) in physics_entities.iter_mut() {
+        let distance = player_pos.distance(transform.translation().truncate());
+
+        if distance > ACTIVATION_RADIUS {
+            // Disable both rigid body and collider if too far
+            commands.entity(entity).insert(RigidBodyDisabled);
+            commands.entity(entity).insert(ColliderDisabled);
+        } else {
+            // Enable both if close enough
+            commands.entity(entity).remove::<RigidBodyDisabled>();
+            commands.entity(entity).remove::<ColliderDisabled>();
+        }
+    }
+
+    // Check standalone colliders (like the ground)
+    for (entity, transform) in standalone_colliders.iter_mut() {
+        let distance = player_pos.distance(transform.translation().truncate());
+
+        if distance > ACTIVATION_RADIUS {
+            // Disable if too far
+            commands.entity(entity).insert(ColliderDisabled);
+        } else {
+            // Enable if close enough
+            commands.entity(entity).remove::<ColliderDisabled>();
         }
     }
 }
