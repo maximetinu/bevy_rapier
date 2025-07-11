@@ -268,10 +268,19 @@ pub fn setup_physics(mut commands: Commands, mut rapier_config: Query<&mut Rapie
         let x = distance * angle.cos();
         let y = distance * angle.sin();
 
+        // worse perf ?
+        // Generate random sizes for x and y dimensions independently
+        let size_x = rad * rad * rng.rand_float();
+        let size_y = rad * rad * rng.rand_float();
+
+        // better perf ?
+        // let size_x = rad;
+        // let size_y = rad;
+
         commands.spawn((
             Transform::from_xyz(x, y, 0.0),
             // RigidBody::Fixed,
-            Collider::cuboid(rad, rad),
+            Collider::cuboid(size_x, size_y),
             CollisionGroups::new(FIXED_CUBES, FIXED_CUBES | DYNAMIC_CUBES | GROUND | PLAYER),
         ));
     }
