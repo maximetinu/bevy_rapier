@@ -86,6 +86,15 @@ bevy-inspector-egui = "0.31"
 bevy_egui = "0.34"
 bevy_mod_debugdump = "0.13"
 serde_json = "1.0"
+web-sys = { version = "0.3", default-features = false, features = [
+    "MemoryMeasurement",
+    "Performance",
+    "console",
+    "Url",
+    "UrlSearchParams",
+    "Window",
+    "Location",
+] }
 
 [package.metadata.docs.rs]
 # Enable all the features when building the docs on docs.rs
